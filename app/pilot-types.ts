@@ -1,0 +1,9 @@
+export type PilotRole='Habitual'|'Reemplazo'|'Administrador';
+export type PilotAccount={id:string;name:string;role:PilotRole};
+export type PilotShift={id:string;day:string;holiday:number;observations:string;status:string;delivered_by:string;delivered_at:string;accepted_by:string|null;accepted_at:string|null};
+export type PilotLine={id:string;shift_id:string;product_id:string;lot_id:string|null;code:string;name:string;lot_number:string|null;expiry:string|null;initial:number;balance:number;observations:string};
+export type PilotEvent={id:string;shift_id:string;line_id:string;kind:string;quantity:number;before_balance:number;after_balance:number;observations:string;actor:string;created_at:string;annulled_at?:string|null;annulled_by?:string|null;annulment_reason?:string|null};
+export type PilotClosure={shift_id:string;observations:string;returned_by:string;returned_at:string;acknowledged_by:string|null;acknowledged_at:string|null};
+export type PhysicalCount={line_id:string;shift_id:string;system_balance:number;physical:number;difference:number};
+export type PilotReceipt={shift_id:string;received_by:string;received_at:string;observations:string};
+export type PilotData={currentShiftId?:string|null;lastTurnState?:{day:string;retired:number;received:number}|null;archivedShiftIds:string[];weeklyUpdates:{id:string;actor:string;created_at:string;filename:string;snapshot_json:string;quantities_json:string;hasOriginal:number}[];setupRequired:boolean;me:PilotAccount|null;accounts:PilotAccount[];shifts:PilotShift[];lines:PilotLine[];events:PilotEvent[];closures:PilotClosure[];physicalCounts:PhysicalCount[];receipts:PilotReceipt[];products:import('./types').Product[];lots:import('./types').Lot[]};
