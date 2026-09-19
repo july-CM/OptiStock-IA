@@ -46,7 +46,7 @@ OPTISTOCK_PUBLIC_ORIGIN=https://inventario.ejemplo.com OPTISTOCK_DB_PATH=/datos/
 
 `OPTISTOCK_PUBLIC_ORIGIN` debe coincidir con la URL HTTPS usada por el navegador. El proxy debe conservar el encabezado `Host` público y ser el único punto de entrada al puerto Node. Las cookies llevan `HttpOnly`, `SameSite=Strict` y `Secure`; los cambios de datos exigen el mismo origen. Mantenga la base y su carpeta `backups/` en almacenamiento persistente. Ejecute un solo proceso que escriba en el archivo SQLite.
 
-El repositorio **no contiene** el inventario real, sus Excel, los archivos cargados, respaldos ni PIN. Crear el repositorio no publica un sitio web ni transfiere los datos del mostrador. Para el acceso remoto falta seleccionar y configurar el alojamiento HTTPS y trasladar la base privada por un canal seguro.
+El repositorio **no contiene** el inventario real, sus Excel, los archivos cargados, respaldos ni PIN. [GitHub Pages](https://july-cm.github.io/OptiStock-IA/) muestra únicamente una demostración estática con datos ficticios; no permite iniciar sesión ni guardar cambios. Para operar el inventario de forma remota falta configurar el servidor HTTPS con almacenamiento persistente y trasladar la base privada por un canal seguro.
 
 ## Comprobación
 
@@ -59,3 +59,4 @@ node node_modules/typescript/bin/tsc --noEmit
 ```
 
 Las pruebas usan bases temporales o en memoria. No alteran el inventario de uso.
+
