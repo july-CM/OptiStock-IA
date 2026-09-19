@@ -1,0 +1,17 @@
+import {build} from 'rolldown';
+import fs from 'node:fs/promises';
+import ts from 'typescript';
+await fs.mkdir('.sites-runtime',{recursive:true});
+const pluginSource=ts.transpileModule(await fs.readFile('build/sites-vite-plugin.ts','utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText;
+await fs.writeFile('.sites-runtime/sites-vite-plugin.mjs',pluginSource);
+const {sites}=await import('../.sites-runtime/sites-vite-plugin.mjs');
+await fs.mkdir('dist/client',{recursive:true});await fs.mkdir('dist/server',{recursive:true});
+await build({input:'app/browser-entry.tsx',platform:'browser',transform:{jsx:{runtime:'automatic'},define:{'process.env.NODE_ENV':JSON.stringify('production')}},output:{dir:'dist/client',format:'esm',entryFileNames:'app.js',chunkFileNames:'[name]-[hash].js',minify:true}});
+await build({input:'server/worker.ts',platform:'browser',transform:{jsx:{runtime:'automatic'}},external:['cloudflare:workers'],output:{dir:'dist/server',format:'esm',entryFileNames:'index.js'}});
+await build({input:'server/pilot.ts',platform:'node',output:{dir:'dist/pilot',format:'esm',entryFileNames:'pilot.js'}});
+const css=(await fs.readFile('app/globals.css','utf8')).replace("@import 'tailwindcss';",'');await fs.writeFile('dist/client/app.css',css);
+await fs.writeFile('dist/client/index.html','<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>OPTICALIA OptiStock IA</title><meta name="description" content="Monturas, accesorios y medicamentos: existencias, conteos, reposición e informes."><link rel="icon" href="/favicon.svg"><link rel="stylesheet" href="/app.css"></head><body><div id="root"></div><script type="module" src="/app.js"></script></body></html>');
+await fs.copyFile('public/favicon.svg','dist/client/favicon.svg');
+const plugin=sites({mockAuth:false});plugin.configResolved({root:process.cwd(),command:'build'});await plugin.closeBundle();
+await fs.writeFile('dist/server/wrangler.json',JSON.stringify({name:'optica-inventarios',main:'index.js',compatibility_date:'2026-09-01',assets:{directory:'../client',binding:'ASSETS',not_found_handling:'single-page-application',run_worker_first:true},d1_databases:[{binding:'DB',database_name:'DB',database_id:'local-db'}]},null,2));
+console.log('Portable Worker and application built successfully.');
