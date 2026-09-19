@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';import {build} from 'rolldown';
+await build({input:'app/pilot-guidance.ts',platform:'node',output:{dir:'work/guidance-test',format:'esm',entryFileNames:'guide.js'}});const {pilotGuidance}=await import('../work/guidance-test/guide.js');
+const data={me:{id:'h',role:'Habitual'},shifts:[],receipts:[],closures:[],archivedShiftIds:[]};
+assert.equal(pilotGuidance(data).target,'pilot-deliver');assert.equal(pilotGuidance(data).step,1);
+const waiting={...data,me:{id:'r',role:'Reemplazo'}};assert.equal(pilotGuidance(waiting).target,'pilot-waiting');
+const delivered={...waiting,shifts:[{id:'s',status:'Entregado'}]};assert.equal(pilotGuidance(delivered).target,'pilot-accept');
+const ongoing={...delivered,shifts:[{id:'s',status:'En curso',accepted_by:'r'}]};assert.equal(pilotGuidance(ongoing).target,'pilot-operation');assert.equal(pilotGuidance(ongoing).step,2);
+assert.equal(pilotGuidance({...ongoing,me:{id:'h',role:'Habitual'}}).target,'pilot-turn');
+assert.equal(pilotGuidance({...ongoing,me:{id:'other',role:'Reemplazo'}}).target,'pilot-turn');
+const returned={...ongoing,closures:[{shift_id:'s'}]};assert.equal(pilotGuidance(returned).target,'pilot-closure');assert.equal(pilotGuidance(returned).step,3);
+assert.equal(pilotGuidance({...returned,me:{id:'h',role:'Habitual'}}).step,3);
+const received={...returned,receipts:[{shift_id:'s'}]};assert.equal(pilotGuidance({...received,me:{id:'h',role:'Habitual'}}).target,'pilot-deliver');assert.equal(pilotGuidance(received).target,'pilot-waiting');
+assert.equal(pilotGuidance({...returned,archivedShiftIds:['s']}).target,'pilot-waiting');assert.equal(pilotGuidance({...data,me:{id:'a',role:'Administrador'}}),null);assert.equal(pilotGuidance({...data,me:null}),null);
+console.log('PASS: correct next step by role, waiting and received states, active actor, closed and archived cycles.');

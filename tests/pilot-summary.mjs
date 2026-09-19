@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import {build} from 'rolldown';
+import {createElement} from 'react';
+import {renderToStaticMarkup} from 'react-dom/server';
+await build({input:'app/pilot-closure.tsx',platform:'node',external:['react','react/jsx-runtime'],transform:{jsx:{runtime:'automatic'}},output:{dir:'work/summary-test',format:'esm',entryFileNames:'closure.js'}});
+const {default:Panel}=await import('../work/summary-test/closure.js');
+const lines=[{id:'a',code:'SIN-CAMBIO',name:'Igual',initial:1,balance:1,observations:'Pendiente importante'},{id:'b',code:'CON-DIFERENCIA',name:'Diferente',initial:2,balance:1,observations:''}];
+const counts=[{line_id:'a',system_balance:1,physical:1,difference:0},{line_id:'b',system_balance:1,physical:0,difference:-1}];
+const props={shift:{id:'s',day:'2026-09-20',observations:'Novedad entrega'},lines,counts,events:[{id:'e',line_id:'b',kind:'Venta',quantity:1,actor:'r',created_at:'2026-09-20T12:00:00Z',observations:'Venta duplicada',annulled_at:'2026-09-20T12:01:00Z',annulled_by:'r',annulment_reason:'Doble clic'}],closure:{returned_by:'r',returned_at:'2026-09-20T13:00:00Z',observations:'Novedad cierre',acknowledged_by:'r',acknowledged_at:'2026-09-20T13:00:00Z'},busy:false,error:'',actor:id=>id,save:async()=>true};
+const admin=renderToStaticMarkup(createElement(Panel,{...props,me:{id:'d',role:'Administrador'}}));
+const replacement=renderToStaticMarkup(createElement(Panel,{...props,me:{id:'r',role:'Reemplazo'}}));
+const summary=html=>html.match(/<div class="pilot-summary">([\s\S]*?)<\/details><\/div>/)[1];
+assert.equal(summary(admin),summary(replacement));
+const beforeDetails=summary(admin).split('<details>')[0];
+assert(!beforeDetails.includes('Igual'));assert(beforeDetails.includes('CON-DIFERENCIA'));assert(beforeDetails.includes('Pendiente importante'));assert(beforeDetails.includes('Anulada'));assert(beforeDetails.includes('Doble clic'));assert(beforeDetails.includes('Novedad entrega'));assert(beforeDetails.includes('Novedad cierre'));
+assert(admin.includes('<details><summary>Ver inventario completo'));assert(!admin.includes('<details open'));assert(admin.includes('Igual'));
+assert(replacement.includes('He revisado este resumen y es correcto, cerrar sesión'));assert(!admin.includes('correcto, cerrar sesión'));
+console.log('PASS: identical simplified summaries, differences only, all notes and annulments, collapsed full inventory and replacement final review.');

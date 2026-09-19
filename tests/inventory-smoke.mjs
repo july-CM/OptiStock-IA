@@ -1,0 +1,33 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import {DatabaseSync} from 'node:sqlite';
+import worker from '../dist/server/index.js';
+const sqlite=new DatabaseSync(':memory:');sqlite.exec('PRAGMA foreign_keys=ON');for(const migration of fs.readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sqlite.exec(fs.readFileSync('drizzle/'+migration,'utf8'));
+class Statement{constructor(sql,args=[]){this.sql=sql;this.args=args}bind(...args){return new Statement(this.sql,args)}async first(){return sqlite.prepare(this.sql).get(...this.args)??null}async run(){const r=sqlite.prepare(this.sql).run(...this.args);return {success:true,meta:{changes:Number(r.changes)},results:[]}}execute(){const p=sqlite.prepare(this.sql);if(p.columns().length){return {success:true,meta:{changes:0},results:p.all(...this.args)}}const r=p.run(...this.args);return {success:true,meta:{changes:Number(r.changes)},results:[]}}}
+const DB={prepare:sql=>new Statement(sql),async batch(statements){sqlite.exec('BEGIN');try{const r=statements.map(s=>s.execute());sqlite.exec('COMMIT');return r}catch(e){sqlite.exec('ROLLBACK');throw e}}};
+const env={DB,ASSETS:{fetch:async()=>new Response('assets')}};const base='https://inventory.test';
+async function request(payload,email='owner@example.test',expected=200){const method=payload?'POST':'GET';const headers={};if(email){headers['oai-authenticated-user-id']=email;headers['oai-authenticated-user-email']=email;}if(payload){headers.origin=base;headers['Content-Type']='application/json'}const r=await worker.fetch(new Request(base+'/api/inventory',{method,headers,body:payload?JSON.stringify(payload):undefined}),env);const d=await r.json();assert.equal(r.status,expected,JSON.stringify(d));return d}
+await request(null,null,401);let d=await request(null);assert.equal(d.canInitialize,true);
+await request({action:'initialize'});d=await request(null);assert.equal(d.me.role,'Administrador');
+await request({action:'initialize'},'outsider@example.test');await request({action:'product'},'outsider@example.test',403);
+const product={action:'product',code:'M-1',name:'Montura de prueba',category:'Montura',stock:3,minimum:2,maximum:10};await request(product);d=await request(null);let p=d.products.find(p=>p.code==='M-1');assert.equal(d.orders.length,0);
+const move=(kind,quantity,extra={})=>({action:'movement',productId:p.id,kind,quantity,note:'Verificación',reason:'Venta o uso',...extra});await request(move('Salida',2));await request(move('Salida',2),undefined,400);d=await request(null);p=d.products.find(x=>x.id===p.id);assert.equal(p.stock,1);assert.equal(d.orders[0].quantity,9);
+await request({action:'count',productId:p.id,quantity:0,expected:1,frequency:'Diario',note:'Diferencia verificada'});d=await request(null);assert.equal(d.counts.length,1);assert.equal(d.counts[0].actual,0);assert.equal(d.orders[0].quantity,10);const order=d.orders[0];
+await request({action:'user',email:'editor@example.test',name:'Inventario',role:'Inventario',active:1});await request({action:'user',email:'reader@example.test',name:'Consulta',role:'Consulta',active:1});
+await request({action:'approve',productId:p.id,orderId:order.id},'editor@example.test',403);await request({action:'approve',productId:p.id,orderId:order.id});
+await request({action:'receive',productId:p.id,orderId:order.id,quantity:4,note:'Recepción parcial'},'editor@example.test');d=await request(null);assert.equal(d.orders[0].received,4);assert.equal(d.orders[0].status,'Aprobada');assert.equal(d.products.find(x=>x.id===p.id).stock,4);
+await request({action:'receive',productId:p.id,orderId:order.id,quantity:7,note:'Exceso'},undefined,400);await request({action:'receive',productId:p.id,orderId:order.id,quantity:6,note:'Recepción completa'});d=await request(null);assert.equal(d.orders[0].status,'Recibida');assert.equal(d.products.find(x=>x.id===p.id).stock,10);
+await request(move('Salida',1),'reader@example.test',403);await request({action:'thresholds',productId:p.id,minimum:1,maximum:5},'editor@example.test',403);await request({action:'user',email:'owner@example.test',name:'Dueña',role:'Consulta',active:1},undefined,400);assert.equal((await request(null,'reader@example.test')).users.length,0);
+await request({action:'product',code:'MED-1',name:'Medicamento de prueba',category:'Medicamento',stock:10,minimum:2,maximum:20,lot:'L-1',expiry:'2099-12-31'});d=await request(null);const med=d.products.find(x=>x.code==='MED-1'),lot=d.lots.find(x=>x.product_id===med.id);
+await request({action:'count',productId:med.id,lotId:lot.id,quantity:8,expected:10,frequency:'Semanal',note:'Ajuste de lote'});assert.equal((await request(null)).products.find(x=>x.id===med.id).stock,8);
+await request({action:'count',productId:med.id,lotId:lot.id,quantity:8,expected:10,frequency:'Semanal',note:'Conteo obsoleto'},undefined,409);
+sqlite.prepare('UPDATE lots SET expiry=? WHERE id=?').run('2020-01-01',lot.id);
+await request({action:'movement',productId:med.id,lotId:lot.id,quantity:1,kind:'Salida',reason:'Venta o uso',note:'Lote vencido'},undefined,400);
+await request({action:'movement',productId:med.id,lotId:lot.id,quantity:1,kind:'Entrada',note:'Entrada vencida'},undefined,400);
+await request({action:'movement',productId:med.id,lotId:lot.id,quantity:8,kind:'Salida',reason:'Vencimiento',note:'Retiro de lote vencido'});
+await request({action:'movement',productId:med.id,quantity:5,kind:'Entrada',note:'Lote nuevo',lot:'L-2',expiry:'2099-12-31'});d=await request(null);assert.equal(d.products.find(x=>x.id===med.id).stock,5);assert.equal(d.lots.filter(x=>x.product_id===med.id).reduce((a,x)=>a+x.stock,0),5);
+for(let i=0;i<510;i+=15){await request({action:'import',items:Array.from({length:Math.min(15,510-i)},(_,j)=>({...product,code:'BULK-'+(i+j),stock:1,minimum:0,maximum:3}))})}d=await request(null);assert.equal(d.products.length,512);
+await request({action:'import',items:[{...product,code:'ROLLBACK'},{...product,code:'M-1'}]},undefined,409);assert.equal((await request(null)).products.some(x=>x.code==='ROLLBACK'),false);
+await request({action:'user',email:'reader@example.test',name:'Consulta',role:'Consulta',active:0});await request(null,'reader@example.test',403);
+console.log('PASS: 512 references; roles; initialization; negative-stock rejection; daily/weekly counts; stale-count protection; automatic replenishment; approval; partial/full receipts; lot totals; expired lots; transactional import rollback.');
+sqlite.close();
